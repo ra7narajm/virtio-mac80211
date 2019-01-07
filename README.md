@@ -4,21 +4,22 @@ Virtio Mac80211 front end driver implementation
 This is a purely academic attempt to implement virtio based softmac IEEE 802.11 device.
 
 virtio IEEE 802.11 backend device implementation is part of,
-https://github.com/ra7narajm/qemu.git
-airport:
-        -net hub implementation
-virtio-mac80211:
-        -virtio IEEE802.11 backend driver
+	https://github.com/ra7narajm/qemu.git
+-airport: net hub implementation
+-virtio-mac80211: virtio IEEE802.11 backend driver
 
 how-to:
 1. qemu guest creation (backend driver),
-        [-netdev airport,terminalid=aid0,id=x0 -device virtio-wifi,netdev=x0,mac=aa:bb:cc:xx:yy:zz]
 
+		[-netdev airport,terminalid=aid0,id=x0 -device virtio-wifi,netdev=x0,mac=aa:bb:cc:xx:yy:zz]
+		
 2. within qemu guest (frontend driver),
+	
         insert virtio_mac80211 kernel module, run hostapd / wpa_supplicant as per guest mode.
 
 The driver heavily borrows (copies!!) from mac80211_hwsim and virtio_net drivers.
 Authors for respective modules,
+
 	--mac80211_hwsim
 		Copyright (c) 2008, Jouni Malinen <j@w1.fi>
 		Copyright (c) 2011, Javier Lopez <jlopex@gmail.com>
