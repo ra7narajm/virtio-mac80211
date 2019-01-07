@@ -4,7 +4,9 @@ Virtio Mac80211 front end driver implementation
 This is a purely academic attempt to implement virtio based softmac IEEE 802.11 device.
 
 virtio IEEE 802.11 backend device implementation is part of,
+
 	https://github.com/ra7narajm/qemu.git
+	
 -airport: net hub implementation
 -virtio-mac80211: virtio IEEE802.11 backend driver
 
