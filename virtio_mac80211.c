@@ -559,7 +559,7 @@ static void __vwlan_mac80211_tx(struct ieee80211_hw *hw,
 
 	__free_old_xmit_skbs(info, sq);	//TODO clear used skbs
 
-	if (!skb->xmit_more)	//TODO: is it needed for wifi packet?
+	//if (!skb->xmit_more)	//TODO: is it needed for wifi packet?
 		virtqueue_enable_cb_delayed(sq->vq);
 
 	if (!data->use_chanctx)	//currently no support for use_chanctx
@@ -1441,6 +1441,7 @@ static void __virtwifi_tx_handler_cb(struct virtqueue *vq)
 {
 	//TODO: identify what goes here!!!
 	//__free_old_xmit_skbs(sq);
+	virtqueue_disable_cb(vq);	//for now only disabling xmit intr
 }
 
 static inline int __virtwifi_find_vqs(struct virtwifi_info *vi)
@@ -1564,12 +1565,12 @@ err_sq:
 	return -ENOMEM;
 }
 
-static int __virtwifi_init_queues(struct virtwifi_info *vi)	//TODO
+static int __virtwifi_init_queues(struct virtwifi_info *vi)
 {
 	//allocate and initialize virtqueues, only one pair currently supoorted
 	int ret = 0;
 
-	ret = __virtwifi_init_queues(vi);
+	ret = __virtwifi_alloc_queues(vi);
 	if (ret)
 		goto err;
 
