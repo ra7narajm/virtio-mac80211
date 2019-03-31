@@ -164,14 +164,6 @@ static const struct ieee80211_rate vwlan_rates[] = {
         { .bitrate = 540 }
 };
 
-//TODO -- unused
-static const unsigned long guest_offloads[] = {
-        VIRTIO_MAC80211_F_GUEST_TSO4,
-        VIRTIO_MAC80211_F_GUEST_TSO6,
-        VIRTIO_MAC80211_F_GUEST_ECN,
-        VIRTIO_MAC80211_F_GUEST_UFO
-};
-
 struct vwlan_chanctx_priv {
         u32 magic;
 };
@@ -985,84 +977,6 @@ static int __vwlan_mac80211_get_survey(struct ieee80211_hw *hw, int idx,
 }
 
 #if 0
-#ifdef CONFIG_NL80211_TESTMODE
-/*
- * This section contains example code for using netlink
- * attributes with the testmode command in nl80211.
- */
-
-/* These enums need to be kept in sync with userspace */
-enum hwsim_testmode_attr {
-	__HWSIM_TM_ATTR_INVALID	= 0,
-	HWSIM_TM_ATTR_CMD	= 1,
-	HWSIM_TM_ATTR_PS	= 2,
-
-	/* keep last */
-	__HWSIM_TM_ATTR_AFTER_LAST,
-	HWSIM_TM_ATTR_MAX	= __HWSIM_TM_ATTR_AFTER_LAST - 1
-};
-
-enum hwsim_testmode_cmd {
-	HWSIM_TM_CMD_SET_PS		= 0,
-	HWSIM_TM_CMD_GET_PS		= 1,
-	HWSIM_TM_CMD_STOP_QUEUES	= 2,
-	HWSIM_TM_CMD_WAKE_QUEUES	= 3,
-};
-
-static const struct nla_policy hwsim_testmode_policy[HWSIM_TM_ATTR_MAX + 1] = {
-	[HWSIM_TM_ATTR_CMD] = { .type = NLA_U32 },
-	[HWSIM_TM_ATTR_PS] = { .type = NLA_U32 },
-};
-
-static int __vwlan_mac80211_testmode_cmd(struct ieee80211_hw *hw,
-				       struct ieee80211_vif *vif,
-				       void *data, int len)
-{
-	struct mac80211_hwsim_data *hwsim = hw->priv;
-	struct nlattr *tb[HWSIM_TM_ATTR_MAX + 1];
-	struct sk_buff *skb;
-	int err, ps;
-
-	err = nla_parse(tb, HWSIM_TM_ATTR_MAX, data, len,
-			hwsim_testmode_policy, NULL);
-	if (err)
-		return err;
-
-	if (!tb[HWSIM_TM_ATTR_CMD])
-		return -EINVAL;
-
-	switch (nla_get_u32(tb[HWSIM_TM_ATTR_CMD])) {
-	case HWSIM_TM_CMD_SET_PS:
-		if (!tb[HWSIM_TM_ATTR_PS])
-			return -EINVAL;
-		ps = nla_get_u32(tb[HWSIM_TM_ATTR_PS]);
-		return hwsim_fops_ps_write(hwsim, ps);
-	case HWSIM_TM_CMD_GET_PS:
-		skb = cfg80211_testmode_alloc_reply_skb(hw->wiphy,
-						nla_total_size(sizeof(u32)));
-		if (!skb)
-			return -ENOMEM;
-		if (nla_put_u32(skb, HWSIM_TM_ATTR_PS, hwsim->ps))
-			goto nla_put_failure;
-		return cfg80211_testmode_reply(skb);
-	case HWSIM_TM_CMD_STOP_QUEUES:
-		ieee80211_stop_queues(hw);
-		return 0;
-	case HWSIM_TM_CMD_WAKE_QUEUES:
-		ieee80211_wake_queues(hw);
-		return 0;
-	default:
-		return -EOPNOTSUPP;
-	}
-
- nla_put_failure:
-	kfree_skb(skb);
-	return -ENOBUFS;
-}
-#endif
-#endif //0
-
-#if 0
 static int __vwlan_mac80211_ampdu_action(struct ieee80211_hw *hw,
 				       struct ieee80211_vif *vif,
 				       struct ieee80211_ampdu_params *params)
@@ -1280,7 +1194,6 @@ static const struct ieee80211_ops virt_mac80211_ops = {
 	.set_tim 		= __vwlan_mac80211_set_tim,
 	.conf_tx 		= __vwlan_mac80211_conf_tx,
 	.get_survey 		= __vwlan_mac80211_get_survey,
-	/* CFG80211_TESTMODE_CMD(mac80211_hwsim_testmode_cmd) */
 	/* .ampdu_action 		= __vwlan_mac80211_ampdu_action, */
 	.flush 			= __vwlan_mac80211_flush,
 	.prepare_multicast	= __vwlan_mac80211_prepare_multicast,
@@ -1330,7 +1243,7 @@ static bool try_fill_recv(struct virtwifi_info *vi, struct receive_queue *rq,
 			goto err_refill;
 		}
 
-		buf = (char *)page_address(alloc_frag->page) + alloc_frag->offset;
+		buf = (char *) page_address(alloc_frag->page) + alloc_frag->offset;
 		get_page(alloc_frag->page);
 		alloc_frag->offset += len;
 		sg_init_one(rq->sg, buf + VIRTMAC80211_RX_PAD, 
@@ -1638,6 +1551,8 @@ static int virtwifi_probe(struct virtio_device *_v)
 	skb_queue_head_init(&data->pending);
 
 	SET_IEEE80211_DEV(hw, &(_v->dev)); //virtio_device->device
+	//TODO:  important read MAC address from virtio device
+	//virtio_cread_bytes(_v, offsetof(), addr, ETH_ALEN);
 	//eth_zero_addr(addr);
 	eth_random_addr(addr);
 	//addr[0] = 0x02;
@@ -1886,30 +1801,16 @@ static struct virtio_device_id id_table[] = {
  * TODO: currently no features are implemented!!
  */
 #define VIRTWIFI_FEATURES \
-	VIRTIO_MAC80211_F_CSUM, VIRTIO_MAC80211_F_GUEST_CSUM, \
 	VIRTIO_MAC80211_F_MAC, \
-	VIRTIO_MAC80211_F_HOST_TSO4, VIRTIO_MAC80211_F_HOST_UFO, VIRTIO_MAC80211_F_HOST_TSO6, \
-	VIRTIO_MAC80211_F_HOST_ECN, VIRTIO_MAC80211_F_GUEST_TSO4, VIRTIO_MAC80211_F_GUEST_TSO6, \
-	VIRTIO_MAC80211_F_GUEST_ECN, VIRTIO_MAC80211_F_GUEST_UFO, \
-	VIRTIO_MAC80211_F_MRG_RXBUF, VIRTIO_MAC80211_F_STATUS, VIRTIO_MAC80211_F_CTRL_VQ, \
-	VIRTIO_MAC80211_F_CTRL_RX, VIRTIO_MAC80211_F_CTRL_VLAN, \
-	VIRTIO_MAC80211_F_GUEST_ANNOUNCE, VIRTIO_MAC80211_F_MQ, \
-	VIRTIO_MAC80211_F_MTU, VIRTIO_MAC80211_F_CTRL_GUEST_OFFLOADS
+	VIRTIO_MAC80211_F_MTU
 
 static unsigned int features[] = {
 	VIRTWIFI_FEATURES,
 };
 
-static unsigned int features_legacy[] = {
-	VIRTWIFI_FEATURES,
-	VIRTIO_F_ANY_LAYOUT,
-};
-
 static struct virtio_driver virtio_mac80211_driver = {
 	.feature_table 		= 	features,
 	.feature_table_size 	= 	ARRAY_SIZE(features),
-	.feature_table_legacy 	= 	features_legacy,
-	.feature_table_size_legacy = 	ARRAY_SIZE(features_legacy),
 	.driver.name 		=	KBUILD_MODNAME,
 	.driver.owner 		=	THIS_MODULE,
 	.id_table 		=	id_table,

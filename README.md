@@ -5,8 +5,7 @@ NOTE: The repo now includes wifi-medium (server) implementation
 
 This is a purely academic attempt to implement virtio based softmac IEEE 802.11 device.
 
-virtio IEEE 802.11 backend device implementation is part of:
-	[Qemu fork](https://github.com/ra7narajm/qemu.git)
+**virtio IEEE 802.11 backend device implementation is part of Qemu v3.1.0 included in the repo**
 
 Qemu backend components,
 1. airport:
@@ -35,8 +34,6 @@ Authors for respective modules,
 
 - virtio_net
 	- Copyright 2007 Rusty Russell <rusty@rustcorp.com.au> IBM Corporation
-
-TODO: [too many to list at this point]
 
 - Alternate implementation:
 	1. adding dummy wireless NIC using mac80211_hwsim
