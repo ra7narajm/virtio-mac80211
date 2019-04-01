@@ -1,4 +1,5 @@
 /*
+ * IEEE 802.11 virtio frontend driver
  * A modified mac80211_hwsim, to work as virtio frontend driver
  * in short, virtio_mac80211 = mac80211_hwsim + virtio_net
  * 
@@ -1551,16 +1552,19 @@ static int virtwifi_probe(struct virtio_device *_v)
 	skb_queue_head_init(&data->pending);
 
 	SET_IEEE80211_DEV(hw, &(_v->dev)); //virtio_device->device
-	//TODO:  important read MAC address from virtio device
-	//virtio_cread_bytes(_v, offsetof(), addr, ETH_ALEN);
-	//eth_zero_addr(addr);
-	eth_random_addr(addr);
-	//addr[0] = 0x02;
-	addr[3] = idx >> 8;
-	addr[4] = idx;
+	/* read MAC from virtio-config else random */
+	if (virtio_has_feature(_v, VIRTIO_MAC80211_F_MAC)) {
+		virtio_cread_bytes(_v, offsetof(struct __vwlan_config, mac), addr, ETH_ALEN);
+	} else {
+		eth_random_addr(addr);
+		addr[3] = idx >> 8;
+		addr[4] = idx;
+	}
 	memcpy(data->addresses[0].addr, addr, ETH_ALEN);
 	memcpy(data->addresses[1].addr, addr, ETH_ALEN);
 	data->addresses[1].addr[0] |= 0x40;
+
+	pr_info("vwlan MAC addr %pM\n", addr);
 
 	hw->wiphy->n_addresses = 2;
 	hw->wiphy->addresses = data->addresses;
