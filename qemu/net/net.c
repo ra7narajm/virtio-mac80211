@@ -964,6 +964,7 @@ static int (* const net_client_init_fun[NET_CLIENT_DRIVER__MAX])(
 #ifdef CONFIG_VHOST_NET_USED
         [NET_CLIENT_DRIVER_VHOST_USER] = net_init_vhost_user,
 #endif
+	[NET_CLIENT_DRIVER_AIRPORT]   = net_init_airport,
 #ifdef CONFIG_L2TPV3
         [NET_CLIENT_DRIVER_L2TPV3]    = net_init_l2tpv3,
 #endif
@@ -1075,6 +1076,7 @@ static void show_netdevs(void)
         "socket",
         "hubport",
         "tap",
+	"airport",      //for virtio-mac80211
 #ifdef CONFIG_SLIRP
         "user",
 #endif

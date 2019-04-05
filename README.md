@@ -7,6 +7,8 @@ This is a purely academic attempt to implement virtio based softmac IEEE 802.11 
 
 **virtio IEEE 802.11 backend device implementation is part of Qemu v3.1.0 included in the repo**
 
+***current status: Qemu code changes in progress***
+
 Qemu backend components,
 1. airport:
 	- portal to wifi-medium

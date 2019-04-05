@@ -441,6 +441,23 @@
     '*queues':        'int' } }
 
 ##
+# @NetdevAirPortOptions:
+#
+# Connect two or more ieee802.11 clients through a software hub.
+# reason for not supporting "mode",
+# -changing frontend driver mode won't be reflected dynamically
+#
+# @termid: Airport terminal id.
+# @mode: sta/ap[/monitor] depending on requirement [XXX not supported]
+#
+# Since: <new>
+##
+{ 'struct': 'NetdevAirPortOptions',
+  'data': {
+    'termid':   'int32',
+    '*mode':    'str' } }
+
+##
 # @NetClientDriver:
 #
 # Available netdev drivers.
@@ -451,7 +468,7 @@
 ##
 { 'enum': 'NetClientDriver',
   'data': [ 'none', 'nic', 'user', 'tap', 'l2tpv3', 'socket', 'vde',
-            'bridge', 'hubport', 'netmap', 'vhost-user' ] }
+            'bridge', 'hubport', 'netmap', 'vhost-user', 'airport' ] }
 
 ##
 # @Netdev:
@@ -479,7 +496,8 @@
     'bridge':   'NetdevBridgeOptions',
     'hubport':  'NetdevHubPortOptions',
     'netmap':   'NetdevNetmapOptions',
-    'vhost-user': 'NetdevVhostUserOptions' } }
+    'vhost-user': 'NetdevVhostUserOptions',
+    'airport':  'NetdevAirPortOptions' } }
 
 ##
 # @NetLegacy:
