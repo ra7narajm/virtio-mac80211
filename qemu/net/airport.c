@@ -8,12 +8,22 @@
 
 #include "qemu/osdep.h"
 #include "qapi/error.h"
+
+#include <sys/ioctl.h>
+#include <sys/wait.h>
+#include <sys/socket.h>
+#include <net/if.h>
+
 #include "monitor/monitor.h"
 #include "net/net.h"
 #include "clients.h"
 #include "airport.h"
 #include "qemu/iov.h"
 #include "qemu/error-report.h"
+#include "qemu-common.h"
+#include "qemu/option.h"
+#include "qemu/main-loop.h"
+#include "qemu/sockets.h"
 #include "sysemu/qtest.h"
 
 #include <syslog.h>
@@ -64,9 +74,9 @@ static void __recv_from_wifimedium(void *op)
 
     bzero(buf, sizeof(wifi_iov));
 
-    size = recv(port->data.datasock, &port->rcvbuf, sizeof(struct wifi_iov));
+    size = recv(port->data.datasock, &port->rcvbuf, sizeof(wifi_iov), 0);
     if (size && port->rcvbuf.__iov.mode) {
-	    syslog(LOG_ERR, "packet received from port: %d\n", port->rcvbuf.portid);
+	    syslog(LOG_ERR, "packet received from port: %d\n", port->rcvbuf.__iov.portid);
 	    qemu_send_packet(&port->nc, port->rcvbuf.frame, (size - offsetof(wifi_iov, frame)));
     }
 }
@@ -78,7 +88,7 @@ static ssize_t net_wifi_port_receive(NetClientState *nc,
     NetAirPort *port = DO_UPCAST(NetAirPort, nc, nc);
     ssize_t ret;
 
-    syslog(LOG_ERR, "out buffer len: %d\n", len);
+    syslog(LOG_ERR, "out buffer len: %ld\n", len);
 
     //TODO: use sndbuf
     memcpy(port->sndbuf.frame, buf, len);
@@ -95,14 +105,14 @@ static void net_wifi_clean_port(struct port_data *data)
 	struct ctrl_iov ctio;
 	//inform server about closing
 	ctio.mode = 0;
-	ctio.hubid = data->hubid;
-	ctio.portid = data->portid;
+	ctio.hubid = data->__iov.hubid;
+	ctio.portid = data->__iov.portid;
 
 	//send close
 	close(data->datasock);
 }
 
-static void net_hub_port_cleanup(NetClientState *nc)
+static void net_wifi_port_cleanup(NetClientState *nc)
 {
     NetAirPort *port = DO_UPCAST(NetAirPort, nc, nc);
 
@@ -125,7 +135,7 @@ static NetAirPort *net_wifi_port_new(struct port_data *data, const char *name,
     NetClientState *nc;
     NetAirPort *port;
 
-    int id = hub->num_ports++;
+    //int id = hub->num_ports++;
     char default_name[128];
 
     if (!name) {
@@ -210,7 +220,7 @@ static int net_wifi_add_port(int hub_id, const char *name,
     struct port_data data;
 
     bzero(&data, sizeof(struct port_data));
-    data.hubid = hub_id;
+    data.__iov.hubid = hub_id;
 
     if (net_wifi_connect(&data) < 0) {
 	    syslog(LOG_ERR, "XXXXX unable to connect to wifi medium!!\n");
@@ -224,7 +234,7 @@ static int net_wifi_add_port(int hub_id, const char *name,
 	    return -1;
     }
 
-    qemu_set_fd_handler(data->datasock, __recv_from_wifimedium, NULL, p);
+    qemu_set_fd_handler(data.datasock, __recv_from_wifimedium, NULL, p);
 
     return 0;
 }
