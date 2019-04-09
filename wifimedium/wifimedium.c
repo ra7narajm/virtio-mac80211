@@ -16,6 +16,7 @@
 #include <sys/un.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <syslog.h>
 
@@ -73,6 +74,12 @@ struct wifimedium_global {
 struct wifimedium_global wmedium;
 
 //----------------------------------------------------------------------------------------
+void __intr_signal_handler(int signum, siginfo_t *info, void *ptr)
+{
+	printf("wifi-medium interrupted.....\n");
+	close(wmedium.ctrlsock);
+}
+
 static int __create_server_socket(char *path)
 {
 	int sock;
@@ -196,6 +203,13 @@ int main (int argc, char **argv)
 	int i = 0;
 	unsigned int tid = 20;
 	char path[64] = { 0 };
+	struct sigaction action;
+
+	bzero(&action, sizeof(action));
+	action.sa_sigaction = __intr_signal_handler;
+	action.sa_flags = SA_SIGINFO;
+
+	//sigaction(SIGINT, &action, NULL);
 
 	bzero(&wmedium, sizeof(struct wifimedium_global));
 	for ( i = 0; i < WIFIMEDIUM_MAX_PORTS; i++) {
@@ -211,6 +225,8 @@ int main (int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 	wmedium.hub.hubid = tid;
+
+	printf("Starting wifi-medium with id: %d ...\n", tid);
 
 	//select() and check all fds
 	work_loop(&wmedium);

@@ -15,8 +15,10 @@
 #include <linux/virtio_config.h>
 #include <linux/virtio_types.h>
 #include <linux/if_ether.h>
+#ifdef __KERNEL__
 #include <linux/ieee80211.h>
 #include <net/mac80211.h>
+#endif //__KERNEL__
 
 #define GOOD_MAC80211_PACKET_LEN	IEEE80211_MAX_RTS_THRESHOLD	//2352
 //#define VIRTMAC80211_RX_PAD 		(NET_IP_ALIGN + NET_SKB_PAD)
