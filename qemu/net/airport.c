@@ -76,7 +76,7 @@ static void __recv_from_wifimedium(void *op)
 
     size = recv(port->data.datasock, &port->rcvbuf, sizeof(wifi_iov), 0);
     if (size && port->rcvbuf.__iov.mode) {
-	    syslog(LOG_ERR, "packet received from port: %d\n", port->rcvbuf.__iov.portid);
+	    //syslog(LOG_ERR, "packet received from port: %d\n", port->rcvbuf.__iov.portid);
 	    qemu_send_packet(&port->nc, port->rcvbuf.frame, (size - offsetof(wifi_iov, frame)));
     }
 }

@@ -553,7 +553,7 @@ static void __vwlan_device_realize(DeviceState *dev, Error **errp)
     //TODO check if [virtio_notify_config(vdev);] needs to be added here
 }
 
-static void virtio_net_device_unrealize(DeviceState *dev, Error **errp)
+static void __vwlan_device_unrealize(DeviceState *dev, Error **errp)
 {
 #if 0
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);

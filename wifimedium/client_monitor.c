@@ -94,5 +94,13 @@ int main (int argc, char **argv)
 	}
 	printf("wifimedium %s conneted on port %d\n", path, ciov.portid);
 
+	while (1) {
+		ret = recv(cliport.data.datasock, &cliport.rcvbuf, sizeof(struct __wifi_iov), 0);
+		if (ret && cliport.rcvbuf.__iov.mode) {
+			printf("packet received from port %d size: %ld\n", cliport.data.__iov.portid, (ret - sizeof(struct ctrl_iov)));
+			//dump packet
+		}
+	}
+
 	return 0;
 }

@@ -2,14 +2,21 @@
 CFLAGS =
 LDFLAGS =
 INCLUDES = 
-SRC = wifimedium.c
-TARGET = wifimedium
 
-all: ${TARGET}
+CM_SRC = client_monitor.c
+CM_TARGET = climon
 
-${TARGET}: ${SRC}
-	${CC} ${CFLAGS} ${INCLUDES} -o ${TARGET} ${SRC} ${LDFLAGS}
+WM_SRC = wifimedium.c
+WM_TARGET = wifimedium
+
+all: ${WM_TARGET} ${CM_TARGET}
+
+${CM_TARGET}: ${CM_SRC}
+	${CC} ${CFLAGS} ${INCLUDES} -o ${CM_TARGET} ${CM_SRC} ${LDFLAGS}
+
+${WM_TARGET}: ${WM_SRC}
+	${CC} ${CFLAGS} ${INCLUDES} -o ${WM_TARGET} ${WM_SRC} ${LDFLAGS}
 
 clean:
-	rm -rf *.o ${TARGET}
+	rm -rf *.o ${WM_TARGET} ${CM_TARGET}
 
