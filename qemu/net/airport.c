@@ -1,5 +1,5 @@
 /*
- * Hub net client
+ * Connectivity to Wifi emulated medium (only for virtio-mac80211)
  *
  * This work is licensed under the terms of the GNU LGPL, version 2 or later.
  * See the COPYING.LIB file in the top-level directory.
@@ -32,10 +32,10 @@ struct ctrl_iov {
 };
 
 //wifi buffer
-typedef struct wifi_iov {
+typedef struct __wifi_iov {
 	struct ctrl_iov __iov;
 	uint8_t frame[WIFIMEDIUM_MAX_FRAME];
-};
+} wifi_iov;
 
 struct port_data {
 	struct ctrl_iov __iov;
@@ -203,7 +203,7 @@ static int net_wifi_connect(struct port_data *data)
     return data->datasock;
 }
 
-NetClientState *net_wifi_add_port(int hub_id, const char *name,
+static int net_wifi_add_port(int hub_id, const char *name,
                                  NetClientState *peer)
 {
     NetAirPort *p;
