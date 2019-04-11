@@ -1,13 +1,13 @@
 ## virtio-mac80211
 **Virtio Mac 802.11 front end driver implementation**
 
-NOTE: The repo now includes wifi-medium (server) implementation
+NOTE: The repo includes wifi-medium (server) implementation
 
 This is a purely academic attempt to implement virtio based softmac IEEE 802.11 device.
 
-**virtio IEEE 802.11 backend device implementation is part of Qemu v3.1.0 included in the repo**
-
-***current status: Qemu code changes in progress***
+**virtio IEEE 802.11 backend device implementation is part of Qemu v3.1.0 (included in the repo)**
+- Qemu configured as follows,
+	_(./configure --prefix=/usr --enable-system --enable-linux-user --enable-gcrypt --enable-linux-aio --enable-tpm --enable-tools --enable-kvm --enable-vhost-net --enable-gnutls)_
 
 Qemu backend components,
 1. airport:
@@ -83,6 +83,11 @@ Authors for respective modules,
                                                               +-----+-------+
                                                               |             |
                   +-------------------------------------------+-------------+-----------------------+
+
+***current status: Qemu code changes in progress***
+- Qemu compilation successful, runtime error as follows,
+**'virtio-mac80211' is not a valid device model name**
+NOTE: netdev appears to be connecting to wifimedium
 
 
 -Ratnaraj Mirgal

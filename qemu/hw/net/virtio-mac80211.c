@@ -32,7 +32,7 @@
 
 /* previously fixed value */
 #define VWLAN_RX_QUEUE_DEFAULT_SIZE 256
-#define VIRTIO_NET_TX_QUEUE_DEFAULT_SIZE 256
+#define VWLAN_TX_QUEUE_DEFAULT_SIZE 256
 
 /* for now, only allow larger queues; with virtio-1, guest can downsize */
 #define VWLAN_RX_QUEUE_MIN_SIZE VWLAN_RX_QUEUE_DEFAULT_SIZE
@@ -45,12 +45,14 @@
 #define endof(container, field) \
     (offsetof(container, field) + sizeof_field(container, field))
 
+#if 0
 static VirtWifiQueue *__get_subqueue(NetClientState *nc)
 {
     VirtWifiInfo *n = qemu_get_nic_opaque(nc);
 
     return &n->vqs[VIRTWIFI_DEFAULT_QUEUE];
 }
+#endif
 
 static int vq2q(int queue_index)
 {
@@ -74,8 +76,8 @@ static void __vwlan_get_config(VirtIODevice *vdev, uint8_t *config)
     virtio_stw_p(vdev, &netcfg.max_virtqueue_pairs, n->max_queues);
     virtio_stw_p(vdev, &netcfg.mtu, n->net_conf.mtu);
     memcpy(netcfg.mac, n->mac, ETH_ALEN);
-    virtio_stl_p(vdev, &netcfg.speed, n->net_conf.speed);
-    netcfg.duplex = n->net_conf.duplex;
+    //virtio_stl_p(vdev, &netcfg.speed, n->net_conf.speed);
+    //netcfg.duplex = n->net_conf.duplex;
     memcpy(config, &netcfg, n->config_size);
 }
 
@@ -194,7 +196,7 @@ static uint64_t __vwlan_get_features(VirtIODevice *vdev, uint64_t features,
 //mapped to guest input queue
 static void __vwlan_handle_rx(VirtIODevice *vdev, VirtQueue *vq)
 {
-    VirtWifiInfo *n = VIRTIO_NET(vdev);
+    VirtWifiInfo *n = VIRTIO_MAC80211_OBJ(vdev);
     int queue_index = vq2q(virtio_get_queue_index(vq));
 
     qemu_flush_queued_packets(qemu_get_subqueue(n->nic, queue_index));
@@ -231,7 +233,7 @@ static int __vwlan_has_buffers(VirtWifiQueue *q, int size)
     if (virtio_queue_empty(q->rx_vq) || !virtqueue_avail_bytes(q->rx_vq, size, 0)) {
 	    virtio_queue_set_notification(q->rx_vq, 1);
 	    //WRT virtio-net driver, to avoid race condition following steps,
-	    if (virtio_queue_empty(q->rx_vq) || !virtqueue_avail_bytes(q->rx_vq, 0)) {
+	    if (virtio_queue_empty(q->rx_vq) || !virtqueue_avail_bytes(q->rx_vq, size, 0)) {
 		    return 0;
 	    }
     }
@@ -257,7 +259,7 @@ static ssize_t __vwlan_receive(NetClientState *nc, const uint8_t *buf,
     unsigned mhdr_cnt = 0;
     size_t offset, i, guest_offset;
 
-    qemu_log_mask(LOG_UNIMP, "vwlan received len %u\n", size);
+    virtio_error(vdev, "vwlan received len %u\n", size);
 
     if (!__vwlan_can_receive(nc))
 	    return -1;
@@ -313,7 +315,7 @@ static int32_t __vwlan_flush_tx(VirtWifiQueue *q);
 static void __vwlan_tx_complete(NetClientState *nc, ssize_t len)
 {
     VirtWifiInfo *n = qemu_get_nic_opaque(nc);
-    VirtWifiQueue *q = virtio_net_get_subqueue(nc);
+    VirtWifiQueue *q = n->vqs;
     VirtIODevice *vdev = VIRTIO_DEVICE(n);
 
     virtqueue_push(q->tx_vq, q->async_tx.elem, 0);
@@ -323,7 +325,7 @@ static void __vwlan_tx_complete(NetClientState *nc, ssize_t len)
     q->async_tx.elem = NULL;
 
     virtio_queue_set_notification(q->tx_vq, 1);
-    virtio_net_flush_tx(q);
+    __vwlan_flush_tx(q);
 }
 
 static int32_t __vwlan_flush_tx(VirtWifiQueue *q)
@@ -489,12 +491,8 @@ static void __set_config_size(VirtWifiInfo *n, uint64_t host_features)
     int i, config_size = 0;
     virtio_add_feature(&host_features, VIRTIO_MAC80211_F_MAC);
 
-    for (i = 0; feature_sizes[i].flags != 0; i++) {
-        if (host_features & feature_sizes[i].flags) {
-            config_size = MAX(feature_sizes[i].end, config_size);
-        }
-    }
-    n->config_size = config_size;
+    //n->config_size = endof(struct virtio_net_config, mac);
+    n->config_size = sizeof(struct __vwlan_config);
 }
 
 static void __vwlan_device_realize(DeviceState *dev, Error **errp)
@@ -621,7 +619,6 @@ static const VMStateDescription vwlan_vmstate = {
     .pre_load	= NULL,
     .post_load 	= __vwlan_post_load,
     .pre_save = __vwlan_pre_save,
-    .post_save	= NULL,
     .fields = (VMStateField[]) {
         VMSTATE_VIRTIO_DEVICE,
         VMSTATE_END_OF_LIST()

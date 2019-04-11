@@ -40,17 +40,12 @@
 #define VIRTIO_MAC80211_S_ANNOUNCE	2    /* Announcement is needed */
 
 struct __vwlan_config {
-	/* The config defining mac address (if VIRTIO_MAC80211_F_MAC) */
 	__u8 mac[ETH_ALEN];
-	/* See VIRTIO_MAC80211_F_STATUS and VIRTIO_MAC80211_S_* above */
 	__u16 status;
-	/* Maximum number of each of transmit and receive queues;
-	 * see VIRTIO_MAC80211_F_MQ and VIRTIO_NET_CTRL_MQ.
-	 * Legal values are between 1 and 0x8000
-	 */
 	__u16 max_virtqueue_pairs;
-	/* Default maximum transmit unit advice */
 	__u16 mtu;
+	uint32_t speed;
+	uint8_t duplex;
 } __attribute__((packed));
 
 #endif //_UAPI_LINUX_VIRTIO_MAC80211_H
