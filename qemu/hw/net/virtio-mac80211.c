@@ -54,6 +54,7 @@ static VirtWifiQueue *__get_subqueue(NetClientState *nc)
 }
 #endif
 
+/*---------------------------------------------------------------------------*/
 static int vq2q(int queue_index)
 {
     return queue_index / 2;
@@ -667,9 +668,73 @@ static const TypeInfo vwlan_info = {
     .class_init = __vwlan_class_init,
 };
 
+/*---------------------------------------------------------------------------*/
+#if 0
+#define PCI_DEVICE_ID_VIRTIO_MAC80211         0x100A
+
+typedef struct VirtWifiInfoPCI {
+    VirtIOPCIProxy parent_obj;
+    VirtWifiInfo vdev;
+} VirtWifiInfoPCI;
+
+#define TYPE_VIRTIO_MAC80211_PCI "virtio-mac80211-pci"
+#define VIRTIO_MAC80211_PCI(obj) \
+        OBJECT_CHECK(VirtWifiInfoPCI, (obj), TYPE_VIRTIO_MAC80211_PCI)
+
+static Property vwlan_pci_properties[] = {
+    DEFINE_PROP_BIT("ioeventfd", VirtIOPCIProxy, flags,
+                    VIRTIO_PCI_FLAG_USE_IOEVENTFD_BIT, true),
+    DEFINE_PROP_UINT32("vectors", VirtIOPCIProxy, nvectors, 3),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
+static void vwlan_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
+{
+    DeviceState *qdev = DEVICE(vpci_dev);
+    VirtWifiInfoPCI *dev = VIRTIO_MAC80211_PCI(vpci_dev);
+    DeviceState *vdev = DEVICE(&dev->vdev);
+
+    qdev_set_parent_bus(vdev, BUS(&vpci_dev->bus));
+    object_property_set_bool(OBJECT(vdev), true, "realized", errp);
+}
+
+static void vwlan_pci_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
+    VirtioPCIClass *vpciklass = VIRTIO_PCI_CLASS(klass);
+
+    k->vendor_id = PCI_VENDOR_ID_REDHAT_QUMRANET;
+    k->device_id = PCI_DEVICE_ID_VIRTIO_MAC80211;
+    k->revision = VIRTIO_PCI_ABI_VERSION;
+    k->class_id = PCI_CLASS_NETWORK_OTHER;
+    set_bit(DEVICE_CATEGORY_NETWORK, dc->categories);
+    dc->props = vwlan_pci_properties;
+    vpciklass->realize = vwlan_pci_realize;
+}
+
+static void vwlan_pci_instance_init(Object *obj)
+{
+    VirtWifiInfoPCI *dev = VIRTIO_MAC80211_PCI(obj);
+
+    virtio_instance_init_common(obj, &dev->vdev, sizeof(dev->vdev),
+                                TYPE_VIRTIO_MAC80211);
+}
+
+static const TypeInfo vwlan_pci_info = {
+    .name          = TYPE_VIRTIO_MAC80211_PCI,
+    .parent        = TYPE_VIRTIO_PCI,
+    .instance_size = sizeof(VirtWifiInfoPCI),
+    .instance_init = vwlan_pci_instance_init,
+    .class_init    = vwlan_pci_class_init,
+};
+#endif
+/*---------------------------------------------------------------------------*/
+
 static void virtio_register_types(void)
 {
     type_register_static(&vwlan_info);
+    //type_register_static(&vwlan_pci_info);
 }
 
 type_init(virtio_register_types)

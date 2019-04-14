@@ -85,8 +85,12 @@ Authors for respective modules,
                   +-------------------------------------------+-------------+-----------------------+
 
 ***current status: Qemu code changes in progress***
-- Qemu compilation successful, runtime error as follows,
-**'virtio-mac80211' is not a valid device model name**
+- Device List,
+	name "virtio-mac80211-device", bus virtio-bus, desc "Virtio MAC 802.11 controller"
+	name "virtio-mac80211-pci", bus PCI
+
+- Qemu runtime error,
+**No 'virtio-bus' bus found for device 'virtio-mac80211-device'**
 NOTE: netdev appears to be connecting to wifimedium
 
 
