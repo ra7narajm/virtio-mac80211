@@ -86,12 +86,12 @@ Authors for respective modules,
 
 ***current status: Qemu code changes in progress***
 - Device List,
-	name "virtio-mac80211-device", bus virtio-bus, desc "Virtio MAC 802.11 controller"
-	name "virtio-mac80211-pci", bus PCI
+	- name "virtio-mac80211-device", bus virtio-bus, desc "Virtio MAC 802.11 controller"
+	- name "virtio-mac80211-pci", bus PCI
 
-- Qemu runtime error,
-**No 'virtio-bus' bus found for device 'virtio-mac80211-device'**
-NOTE: netdev appears to be connecting to wifimedium
-
+- Qemu guest config,
+	- qemu-system-i386 -smp 2 -kernel ./bzImage -m 1G -serial stdio --append "root=/dev/sda rw console=tty0 console=ttyS0,115200" -drive format=raw,file=./rootfs.ext2,index=0,media=disk -boot c -rtc base=localtime -netdev airport,termid=20,id=x0 -device virtio-mac80211-pci,netdev=x0,mac=52:55:00:d1:55:01 -netdev tap,ifname=tap0,script=no,downscript=no,id=x1 -device virtio-net,netdev=x1,mac=52:55:00:d1:55:02
+	- lspci output,
+		**00:03.0 Class 0280: 1af4:100a virtio-pci**
 
 -Ratnaraj Mirgal
