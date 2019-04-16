@@ -1,0 +1,24 @@
+#!/bin/bash
+
+echo -n "Bridge creation (with tuntap interface)"
+
+echo -n "Enter interface name: "
+read NIC_ARG
+
+sudo ip li se ${NIC_ARG} down 
+sudo ip ad flush dev ${NIC_ARG} 
+sudo ip tuntap add mode tap tap0 
+sudo ip li se tap0 down 
+
+sudo ip li add br0 type bridge 
+sudo ip li se br0 up 
+
+sleep 5
+
+sudo ip li se ${NIC_ARG} up 
+sudo ip li se ${NIC_ARG} master br0 
+sudo ip li se tap0 up  
+sudo ip li se tap0 master br0 
+
+sudo dhclient br0
+sudo ip ad flush dev ${NIC_ARG}
