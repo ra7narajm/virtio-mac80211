@@ -42,6 +42,7 @@ NOTE: Qemu backend netdev **airport** is only compatible with device **virtio-ma
 
 - Topology:
 
+			Client VMs (virtio-mac80211 in managed mode)
                                       +----------------+            +----------------+
                                       |  vCL1          |            | vCL2           |
                                       |                |            |                |
@@ -62,8 +63,8 @@ NOTE: Qemu backend netdev **airport** is only compatible with device **virtio-ma
                                                     |    |       |    |
                                                     |    +-------+    |
                                                     |     vwlan0      |
-                                                    |                 |
-                                                    |     eth0        |
+                                                    |                 |  Access Point VM
+                                                    |     eth0        |  (virtio-mac80211 in AP mode)
                                                     |    +-------+    |
                                                     |    |       |    |
                                                     +-----------------+
