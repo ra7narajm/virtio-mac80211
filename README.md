@@ -24,15 +24,19 @@ how-to:
         - **-netdev airport,termid=123,id=x0 -device virtio-wifi,netdev=x0,mac=aa:bb:cc:xx:yy:zz**
 
 3. within qemu guest (frontend driver),
-	- **insmod virtio_mac80211.ko**
-        - _now run hostapd / wpa_supplicant as per guest mode_
+	- **insmod virtio-mac80211.ko**
+	- _now run hostapd / wpa-supplicant as per guest mode_
+4. Steps to add frontend driver with buildroot,
+	- In progress _(buildroot config to be included)_
 
-The frontend driver heavily borrows (copies!!) from mac80211_hwsim and virtio_net drivers.
-In backend netdev (airport) driver is implemented by referring to VDE and hubport drivers.
-While, backend device (virtio-mac80211) driver refers to virtio-net, virtio-rng.
+The frontend (Linux) driver is based on mac80211-hwsim and virtio-net drivers.
+And Qemu backend netdev (airport) driver is implemented by referring to VDE and hubport drivers.
+While, backend device (virtio-mac80211) driver is (mostly) based on virtio-net and virtio-rng.
+
+NOTE: Qemu backend netdev **airport** is only compatible with device **virtio-mac80211**
 
 - Alternate implementation:
-	1. adding dummy wireless NIC using mac80211_hwsim
+	1. adding dummy wireless NIC using mac80211-hwsim
 	2. enabling monitor mode (RadioTAP) on dummy interface,
 	3. redirecting (ie. tunnel) traffic over ethernet NIC.
 
@@ -41,7 +45,7 @@ While, backend device (virtio-mac80211) driver refers to virtio-net, virtio-rng.
                                       +----------------+            +----------------+
                                       |  vCL1          |            | vCL2           |
                                       |                |            |                |
-                                      |    wlan0       |            |    wlan0       |
+                                      |    vwlan0      |            |    vwlan0      |
                                       |   +--------+   |            |   +--------+   |
                                       |   |        |   |            |   |        |   |
                                       +---+---+----+---+            +---+----+---+---+
@@ -57,7 +61,7 @@ While, backend device (virtio-mac80211) driver refers to virtio-net, virtio-rng.
                                                     +----+---+---+----+
                                                     |    |       |    |
                                                     |    +-------+    |
-                                                    |    wlan0        |
+                                                    |     vwlan0      |
                                                     |                 |
                                                     |     eth0        |
                                                     |    +-------+    |
@@ -78,8 +82,8 @@ While, backend device (virtio-mac80211) driver refers to virtio-net, virtio-rng.
                                                               |             |
                   +-------------------------------------------+-------------+-----------------------+
 
-***current status: Qemu code changes in progress***
-- Device List,
+***Current status: virtio-mac80211 frontend driver integration with buildroot***
+- Qemu Device List,
 	- name "virtio-mac80211-device", bus virtio-bus, desc "Virtio MAC 802.11 controller"
 	- name "virtio-mac80211-pci", bus PCI
 

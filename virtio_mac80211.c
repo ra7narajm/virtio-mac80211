@@ -10,9 +10,6 @@
 
 /*
  * function naming: <virtwifi> virtio specific & <vwlan> mac80211 specific
- * TODO: Please refer to mac80211_hwsim TODO list
- * 1. Per link signal-to-noise ratio model to be added in qemu backend driver, 
- *      frontend driver to be updated accordingly (reference wmediumd)
  */
 
 #include <linux/netdevice.h>
@@ -1721,7 +1718,7 @@ static int virtwifi_probe(struct virtio_device *_v)
 	info->big_packets = false;	//no big packet support
 	info->mergeable_rx_bufs = false;	//host to merge rx buffers for big packet?!?!
 	info->hdr_len = 0;
-	info->has_cvq = true;
+	info->has_cvq = false;		//NO ctrl vq for now, TODO once wifi-medium SnR is implemented
 	info->any_header_sg = false;
 
 	err = __virtwifi_init_queues(info);

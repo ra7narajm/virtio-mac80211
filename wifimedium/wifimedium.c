@@ -32,6 +32,9 @@
 
 #define NO_SOCKET	-1
 
+/* 
+ * TODO: -for new port return RSSI value based on SnR logic
+ */
 struct ctrl_iov {
         int8_t mode;           //0 = new port, 1 = wifi packet
         int8_t hubid;
