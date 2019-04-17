@@ -1,0 +1,2 @@
+name: VIRTIO_MAC80211
+desc: Buildroot external package support for virtio-mac80211 driver

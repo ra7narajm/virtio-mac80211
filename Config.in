@@ -1,0 +1,12 @@
+comment "virtio-mac80211 needs a Linux kernel to be built"
+        depends on !BR2_LINUX_KERNEL
+
+config BR2_PACKAGE_VIRTIO_MAC80211
+	bool "virtio-mac80211"
+	depends on BR2_LINUX_KERNEL
+	help
+		Buildroot package for virtio_mac80211 driver module
+		make sure to enable following kernel config options,
+
+		CONFIG_MAC80211
+		CONFIG_MAC80211_HWSIM (for testing)

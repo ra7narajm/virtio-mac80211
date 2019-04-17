@@ -1,8 +1,9 @@
 obj-m += virtio_mac80211.o
 
 all:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+	make -C $(LINUX_DIR) M=$(BR2_EXTERNAL_VIRTIO_MAC80211_PATH) modules
 
 clean:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+	make -C $(LINUX_DIR) M=$(BR2_EXTERNAL_VIRTIO_MAC80211_PATH) clean
 
+#make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
