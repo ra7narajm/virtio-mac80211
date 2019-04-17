@@ -27,7 +27,8 @@ how-to:
 	- **insmod virtio-mac80211.ko**
 	- _now run hostapd / wpa-supplicant as per guest mode_
 4. Steps to add frontend driver with buildroot,
-	- In progress _(buildroot config to be included)_
+	- Currently tested with buildroot-2018.02.4, using buildroot config (misc/qemu_virtio_test_defconfig) and linux config (misc/linux-4.15.config).
+	- To build virtio-mac80211 driver module, add this repo as BR2-EXTERNAL package. for example, **make O=./build/vtest BR2-EXTERNAL=~/path/to/virtio-mac80211 menuconfig**
 
 The frontend (Linux) driver is based on mac80211-hwsim and virtio-net drivers.
 And Qemu backend netdev (airport) driver is implemented by referring to VDE and hubport drivers.
@@ -83,7 +84,7 @@ NOTE: Qemu backend netdev **airport** is only compatible with device **virtio-ma
                                                               |             |
                   +-------------------------------------------+-------------+-----------------------+
 
-***Current status: virtio-mac80211 frontend driver integration with buildroot***
+***Current status: virtio-mac80211 frontend driver wireless packet path to wifi-medium***
 - Qemu Device List,
 	- name "virtio-mac80211-device", bus virtio-bus, desc "Virtio MAC 802.11 controller"
 	- name "virtio-mac80211-pci", bus PCI
@@ -92,5 +93,22 @@ NOTE: Qemu backend netdev **airport** is only compatible with device **virtio-ma
 	- qemu-system-i386 -smp 2 -kernel ./bzImage -m 1G -serial stdio --append "root=/dev/sda rw console=tty0 console=ttyS0,115200" -drive format=raw,file=./rootfs.ext2,index=0,media=disk -boot c -rtc base=localtime **-netdev airport,termid=20,id=x0 -device virtio-mac80211-pci,netdev=x0,mac=52:55:00:d1:55:01** -netdev tap,ifname=tap0,script=no,downscript=no,id=x1 -device virtio-net,netdev=x1,mac=52:55:00:d1:55:02
 	- lspci output,
 		**00:03.0 Class 0280: 1af4:100a virtio-pci**
+```
+00:03.0 Network controller [0280]: Red Hat, Inc Device [1af4:100a]
+	Subsystem: Red Hat, Inc Device [1af4:000a]
+	Kernel driver in use: virtio-pci
+
+# lsmod
+Module                  Size  Used by    Tainted: G  
+arc4                   16384  2 
+virtio_mac80211        24576  0 
+mac80211              356352  1 virtio_mac80211
+sha256_generic         24576  0 
+cfg80211              221184  1 mac80211
+
+4: wlan0: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
+    link/ether 52:55:00:d1:55:01 brd ff:ff:ff:ff:ff:ff
+
+```
 
 -Ratnaraj Mirgal
