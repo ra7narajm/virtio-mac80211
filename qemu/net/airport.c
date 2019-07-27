@@ -74,10 +74,14 @@ static void __recv_from_wifimedium(void *op)
 
     bzero(buf, sizeof(wifi_iov));
 
+    syslog(LOG_ERR, "XXXXX __recv_from_wifimedium invoked..\n");
+
     size = recv(port->data.datasock, &port->rcvbuf, sizeof(wifi_iov), 0);
     if (size && port->rcvbuf.__iov.mode) {
-	    //syslog(LOG_ERR, "packet received from port: %d\n", port->rcvbuf.__iov.portid);
+	    syslog(LOG_ERR, "XXXXX packet received from port: %d\n", port->rcvbuf.__iov.portid);
 	    qemu_send_packet(&port->nc, port->rcvbuf.frame, (size - offsetof(wifi_iov, frame)));
+    } else {
+	    syslog(LOG_ERR, "XXXXX __recv_from_wifimedium: received packet size: %u and mode: %u\n", size, port->rcvbuf.__iov.mode);
     }
 }
 
@@ -88,13 +92,15 @@ static ssize_t net_wifi_port_receive(NetClientState *nc,
     NetAirPort *port = DO_UPCAST(NetAirPort, nc, nc);
     ssize_t ret;
 
-    syslog(LOG_ERR, "out buffer len: %ld\n", len);
+    syslog(LOG_ERR, "XXXXX net_wifi_port_receive out buffer len: %ld\n", len);
 
     //TODO: use sndbuf
     memcpy(port->sndbuf.frame, buf, len);
 
     do {
 	    ret = send(port->data.datasock, &port->sndbuf, (len + offsetof(wifi_iov, frame)), 0);
+	    syslog(LOG_ERR, "net_wifi_port_receive: %d  mode: %d hubid: %d portid: %d\n", ret,
+	    	port->sndbuf.__iov.mode, port->sndbuf.__iov.hubid, port->sndbuf.__iov.portid);
     } while (ret < 0 && errno == EINTR);
 
     return ret;
@@ -205,7 +211,7 @@ static int net_wifi_connect(struct port_data *data)
 
 	    if (ciov.portid < 0) {
 	    }
-	    syslog(LOG_ERR, "wifimedium %s conneted on port %d\n", path, ciov.portid);
+	    syslog(LOG_ERR, "XXXXX wifimedium %s conneted on port %d\n", path, ciov.portid);
 
 	    data->__iov.portid = ciov.portid;
     }

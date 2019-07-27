@@ -20,5 +20,5 @@ sudo ip li se ${NIC_ARG} master br0
 sudo ip li se tap0 up  
 sudo ip li se tap0 master br0 
 
-sudo dhclient br0
 sudo ip ad flush dev ${NIC_ARG}
+#sudo dhclient br0

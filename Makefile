@@ -6,4 +6,8 @@ all:
 clean:
 	make -C $(LINUX_DIR) M=$(BR2_EXTERNAL_VIRTIO_MAC80211_PATH) clean
 
-#make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+sabuild:
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+
+saclean:
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean

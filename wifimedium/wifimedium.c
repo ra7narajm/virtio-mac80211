@@ -112,6 +112,36 @@ static int __create_server_socket(char *path)
 
 #define hubport 	wmedium.hub.ports
 
+static int __build_master_set(struct wifimedium_global *wm, fd_set *master)
+{
+	int i = 0;
+	int fmax = wm->ctrlsock;
+
+	FD_ZERO(master);
+	FD_SET(wm->ctrlsock, master);
+
+	for (i = 0; i < WIFIMEDIUM_MAX_PORTS; i++) {
+		if (hubport[i].clisock > NO_SOCKET) {
+			fmax = fmax > hubport[i].clisock ? fmax : hubport[i].clisock;
+			FD_SET(hubport[i].clisock, master);
+		}
+	}
+	return fmax;
+}
+
+static void __hex_dump(char *frame, int len)
+{
+	int i = 0;
+
+	for (i = 0; i < len; i++) {
+		//if (i % 8)
+		//	printf("\n");
+
+		printf("%2X ", frame[i]);
+	}
+	printf("\n\n");
+}
+
 void work_loop(void *data)
 {
 	int fd_max = wmedium.ctrlsock;
@@ -133,14 +163,20 @@ void work_loop(void *data)
 			int nc = 0;
 			for (nc = 0; nc < WIFIMEDIUM_MAX_PORTS; nc++) {
 				if (hubport[nc].clisock > NO_SOCKET && FD_ISSET(hubport[nc].clisock, &read_fds)) {
+					printf("XXXX incoming on port %d\n", nc);
 					int nbytes = recv(hubport[nc].clisock, &(hubport[nc].rcvbuf), sizeof(struct wifi_iov), 0);
 					if (nbytes) {	//TODO nbytes >= sizeof(struct ctrl_iov)
+						printf("XXXX received # bytes: %d mode:%d hubid:%d portid:%d\n", nbytes, 
+							hubport[nc].rcvbuf.__iov.mode, hubport[nc].rcvbuf.__iov.hubid, hubport[nc].rcvbuf.__iov.portid);
 						if (hubport[nc].rcvbuf.__iov.mode) {	//wifi packet, broadcast
 							int cnt = 0;
+							//__hex_dump(hubport[nc].rcvbuf.frame, nbytes);
 							for (cnt = 0; cnt < WIFIMEDIUM_MAX_PORTS; cnt++) {
 								//broadcast
-								if (cnt == nc || hubport[cnt].clisock == NO_SOCKET)
+								if (cnt == nc || hubport[cnt].clisock == NO_SOCKET) {
+									printf("<<<< nothing to broadcast to port: %d\n", cnt);
 									continue;
+								}
 
 								printf("XXX send to port %d\n", cnt);
 								send(hubport[cnt].clisock, &(hubport[nc].rcvbuf), nbytes, 0);
@@ -148,7 +184,7 @@ void work_loop(void *data)
 						} else /*if (!hubport[nc].rcvbuf.__iov.mode)*/ {	//port request
 							if (hubport[nc].rcvbuf.__iov.hubid == wmedium.hub.hubid) {
 								hubport[nc].rcvbuf.__iov.portid = hubport[nc].portid;
-								printf("XXX new port requested %d\n", hubport[nc].portid);
+								printf(">>>>> new port requested %d\n", hubport[nc].portid);
 								send(hubport[nc].clisock, &(hubport[nc].rcvbuf), sizeof(struct ctrl_iov), 0);
 							} else {
 								//send closing message to qemu client!!
@@ -159,6 +195,11 @@ void work_loop(void *data)
 								wmedium.hub.num_ports--;
 							}
 						}
+					} else {
+						printf("XXXX received %d bytes from port %d\n", nbytes, nc);
+						close(hubport[nc].clisock);
+						hubport[nc].clisock = NO_SOCKET;
+						wmedium.hub.num_ports--;
 					}
 				}
 			}
@@ -174,16 +215,13 @@ void work_loop(void *data)
 								hubport[i].portid = i;	//NOTE: for dynamic list portid makes sense
 								wmedium.hub.num_ports++;
 
-								fd_max = fd_max > newfd ? fd_max : newfd;
-								FD_SET(newfd, &master);
-
-								syslog(LOG_ERR, "new connection port @: %d\n", i);
-
+								printf("<<<<< new connection port @: %d\n", i);
 								break;
 							}
 						}
 					} else {
 						//too many ports
+						printf("XXXXX medium congested...\n");
 						close(newfd);
 					}
 				}
@@ -192,6 +230,8 @@ void work_loop(void *data)
 		} else {
 			perror("select failure\n");
 		}
+		//printf("XXXXX select done...\n");
+		fd_max = __build_master_set(&wmedium, &master);
 	}
 }
 

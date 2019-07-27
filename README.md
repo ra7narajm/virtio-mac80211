@@ -84,7 +84,7 @@ NOTE: Qemu backend netdev **airport** is only compatible with device **virtio-ma
                                                               |             |
                   +-------------------------------------------+-------------+-----------------------+
 
-***Current status: virtio-mac80211 frontend driver wireless packet path to wifi-medium***
+***Current status: virtio-mac80211 frontend driver panic after starting probe (iw wlan0 scan)***
 - Qemu Device List,
 	- name "virtio-mac80211-device", bus virtio-bus, desc "Virtio MAC 802.11 controller"
 	- name "virtio-mac80211-pci", bus PCI
@@ -108,6 +108,9 @@ cfg80211              221184  1 mac80211
 
 4: wlan0: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
     link/ether 52:55:00:d1:55:01 brd ff:ff:ff:ff:ff:ff
+
+- TODO,
+	- Sample Linux kernel config to have CONFIG_CFG80211_WEXT, as frontend driver does not implement wireless extension (and do not intend to).
 
 ```
 

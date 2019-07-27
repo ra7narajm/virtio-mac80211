@@ -25,6 +25,8 @@
 #include "migration/misc.h"
 #include "standard-headers/linux/ethtool.h"
 
+#include <syslog.h>
+
 #define VIRTIO_ID_MAC80211              10	//virtio-ids.h
 
 #define VIRTWIFI_MAX_QUEUE_PAIR         1
@@ -94,7 +96,7 @@ static void __vwlan_set_status(struct VirtIODevice *vdev, uint8_t status)
     VirtWifiInfo *n = VIRTIO_MAC80211_OBJ(vdev);
     VirtWifiQueue *q;
     bool queue_started;
-    uint8_t queue_status;
+    //uint8_t queue_status;
     
     NetClientState *ncs = qemu_get_subqueue(n->nic, 0);
     q = &n->vqs[VIRTWIFI_DEFAULT_QUEUE];
@@ -183,7 +185,7 @@ static uint64_t __vwlan_get_features(VirtIODevice *vdev, uint64_t features,
                                         Error **errp)
 {
     VirtWifiInfo *n = VIRTIO_MAC80211_OBJ(vdev);
-    NetClientState *nc = qemu_get_queue(n->nic);
+    //NetClientState *nc = qemu_get_queue(n->nic);
 
     /* Firstly sync all virtio-net possible supported features */
     features |= n->host_features;
@@ -229,7 +231,7 @@ static int __vwlan_can_receive(NetClientState *nc)
 static int __vwlan_has_buffers(VirtWifiQueue *q, int size)
 {
     //placeholder
-    VirtWifiInfo *n = q->n;
+    //VirtWifiInfo *n = q->n;
 
     if (virtio_queue_empty(q->rx_vq) || !virtqueue_avail_bytes(q->rx_vq, size, 0)) {
 	    virtio_queue_set_notification(q->rx_vq, 1);
@@ -256,11 +258,11 @@ static ssize_t __vwlan_receive(NetClientState *nc, const uint8_t *buf,
     VirtWifiInfo *n = qemu_get_nic_opaque(nc);
     VirtWifiQueue *q = &n->vqs[VIRTWIFI_DEFAULT_QUEUE];
     VirtIODevice *vdev = VIRTIO_DEVICE(n);
-    struct iovec mhdr_sg[VIRTQUEUE_MAX_SIZE];
-    unsigned mhdr_cnt = 0;
-    size_t offset, i, guest_offset;
+    //struct iovec mhdr_sg[VIRTQUEUE_MAX_SIZE];
+    //unsigned mhdr_cnt = 0;
+    size_t offset, i/*, guest_offset*/;
 
-    virtio_error(vdev, "vwlan received len %u\n", size);
+    virtio_error(vdev, "vwlan received len %lu\n", size);
 
     if (!__vwlan_can_receive(nc))
 	    return -1;
@@ -278,7 +280,7 @@ static ssize_t __vwlan_receive(NetClientState *nc, const uint8_t *buf,
 
 	    elem = virtqueue_pop(q->rx_vq, sizeof(VirtQueueElement));
 	    if (!elem) {
-		    virtio_error(vdev, "virtio-mac80211 unexpected empty queue: %d", size);
+		    virtio_error(vdev, "virtio-mac80211 unexpected empty queue: %ld", size);
 		    return -1;
 	    }
 
@@ -286,6 +288,7 @@ static ssize_t __vwlan_receive(NetClientState *nc, const uint8_t *buf,
 		    virtio_error(vdev,
                          "virtio-mac80211 receive queue contains no in buffers");
 		    virtqueue_detach_element(q->rx_vq, elem, 0);
+		    g_free(elem);
 		    return -1;
 	    }
 
@@ -311,80 +314,7 @@ static ssize_t __vwlan_receive(NetClientState *nc, const uint8_t *buf,
 }
 
 /* TX */
-static int32_t __vwlan_flush_tx(VirtWifiQueue *q);
-
-static void __vwlan_tx_complete(NetClientState *nc, ssize_t len)
-{
-    VirtWifiInfo *n = qemu_get_nic_opaque(nc);
-    VirtWifiQueue *q = n->vqs;
-    VirtIODevice *vdev = VIRTIO_DEVICE(n);
-
-    virtqueue_push(q->tx_vq, q->async_tx.elem, 0);
-    virtio_notify(vdev, q->tx_vq);
-
-    g_free(q->async_tx.elem);
-    q->async_tx.elem = NULL;
-
-    virtio_queue_set_notification(q->tx_vq, 1);
-    __vwlan_flush_tx(q);
-}
-
-static int32_t __vwlan_flush_tx(VirtWifiQueue *q)
-{
-    VirtWifiInfo *n = q->n;
-    VirtIODevice *vdev = VIRTIO_DEVICE(n);
-    VirtQueueElement *elem;
-    int32_t num_packets = 0;
-    int queue_index = vq2q(virtio_get_queue_index(q->tx_vq));
-    if (!(vdev->status & VIRTIO_CONFIG_S_DRIVER_OK)) {
-        return num_packets;
-    }
-
-    if (q->async_tx.elem) {
-        virtio_queue_set_notification(q->tx_vq, 0);
-        return num_packets;
-    }
-
-    for (;;) {
-        ssize_t ret;
-        unsigned int out_num;
-        struct iovec sg[VIRTQUEUE_MAX_SIZE], sg2[VIRTQUEUE_MAX_SIZE + 1], *out_sg;
-        struct virtio_net_hdr_mrg_rxbuf mhdr;
-
-        elem = virtqueue_pop(q->tx_vq, sizeof(VirtQueueElement));
-        if (!elem) {
-            break;
-        }
-
-        out_num = elem->out_num;
-        out_sg = elem->out_sg;
-        if (out_num < 1) {
-            virtio_error(vdev, "virtio-net header not in first element");
-            virtqueue_detach_element(q->tx_vq, elem, 0);
-            g_free(elem);
-            return -EINVAL;
-        }
-
-        ret = qemu_sendv_packet_async(qemu_get_subqueue(n->nic, queue_index),
-                                      out_sg, out_num, __vwlan_tx_complete);
-        if (ret == 0) {
-            virtio_queue_set_notification(q->tx_vq, 0);
-            q->async_tx.elem = elem;
-            return -EBUSY;
-        }
-
-drop:
-        virtqueue_push(q->tx_vq, elem, 0);
-        virtio_notify(vdev, q->tx_vq);
-        g_free(elem);
-
-        if (++num_packets >= n->tx_burst) {
-            break;
-        }
-    }
-    return num_packets;
-}
-
+//tx callback
 static void __vwlan_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
 {
     VirtWifiInfo *n = VIRTIO_MAC80211_OBJ(vdev);
@@ -392,6 +322,7 @@ static void __vwlan_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
 
     if (unlikely((n->status & VIRTIO_MAC80211_S_LINK_UP) == 0)) {
         __drop_tx_queue_data(vdev, vq);
+	syslog(LOG_ERR, "XXXXX __vwlan_handle_tx: link down\n");
         return;
     }
 
@@ -401,18 +332,24 @@ static void __vwlan_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
     q->tx_waiting = 1;
     /* This happens when device was stopped but VCPU wasn't. */
     if (!vdev->vm_running) {
+	syslog(LOG_ERR, "XXXX __vwlan_handle_tx: vm not running\n");
         return;
     }
+
+    syslog(LOG_ERR, "XXXX __vwlan_handle_tx: scheduling bh now.. \n");
     virtio_queue_set_notification(vq, 0);
     qemu_bh_schedule(q->tx_bh);
 }
 
-static void __vwlan_tx_bh(void *opaque)
+//tx bottom-half
+static void __vwlan_tx_bh(void *opaque)		//TODO
 {
     VirtWifiQueue *q = opaque;
     VirtWifiInfo *n = q->n;
     VirtIODevice *vdev = VIRTIO_DEVICE(n);
-    int32_t ret;
+    int32_t num_packets = 0;
+    int queue_index = vq2q(virtio_get_queue_index(q->tx_vq));
+    //int32_t ret;
 
     /* This happens when device was stopped but BH wasn't. */
     if (!vdev->vm_running) {
@@ -421,39 +358,45 @@ static void __vwlan_tx_bh(void *opaque)
         return;
     }
 
-    q->tx_waiting = 0;
+    q->tx_waiting = 0;	//so the tx_handler can schedule tx_bh
 
     /* Just in case the driver is not ready on more */
     if (unlikely(!(vdev->status & VIRTIO_CONFIG_S_DRIVER_OK))) {
         return;
     }
 
-    ret = __vwlan_flush_tx(q);
-    if (ret == -EBUSY || ret == -EINVAL) {
-        return; /* Notification re-enable handled by tx_complete or device
-                 * broken */
-    }
+    syslog(LOG_INFO, "__vwlan_tx_bh: now looping on tx queue\n");
+    while (!virtio_queue_empty(q->tx_vq)) {
+	    VirtQueueElement *elem;
 
-    /* If we flush a full burst of packets, assume there are
-     * more coming and immediately reschedule */
-    if (ret >= n->tx_burst) {
-        qemu_bh_schedule(q->tx_bh);
-        q->tx_waiting = 1;
-        return;
-    }
+	    elem = virtqueue_pop(q->tx_vq, sizeof(VirtQueueElement));
+	    if (!elem)
+		    break;	//XXX if queue !empty, then how elem is NULL?
+	    
+	    if (elem->out_num < 1) {
+		    virtio_error(vdev, "virtio-net header not in first element");
+		    virtqueue_detach_element(q->tx_vq, elem, 0);	//problematic elem will not be pushed back
+		    g_free(elem);
+		    break;
+	    }
 
-    /* If less than a full burst, re-enable notification and flush
-     * anything that may have come in while we weren't looking.  If
-     * we find something, assume the guest is still active and reschedule */
+	    qemu_sendv_packet(qemu_get_subqueue(n->nic, queue_index),
+	    		elem->out_sg, elem->out_num);	//TODO process return value
+
+	    virtqueue_push(q->tx_vq, elem, 0);	//this will zero out and push back in vq, detach with discard it
+	    virtio_notify(vdev, q->tx_vq);
+	    g_free(elem);
+
+	    if (++num_packets >= n->tx_burst) {
+		    syslog(LOG_INFO, "XXXX __vwlan_tx_bh: need to reschedule bh %d\n", num_packets);
+		    qemu_bh_schedule(q->tx_bh);
+		    q->tx_waiting = 1;
+		    return;
+	    }
+    }
+    
     virtio_queue_set_notification(q->tx_vq, 1);
-    ret = __vwlan_flush_tx(q);
-    if (ret == -EINVAL) {
-        return;
-    } else if (ret > 0) {
-        virtio_queue_set_notification(q->tx_vq, 0);
-        qemu_bh_schedule(q->tx_bh);
-        q->tx_waiting = 1;
-    }
+    syslog(LOG_ERR, "XXXX __vwlan_tx_bh: %d packets processed\n", num_packets);
 }
 
 #if 0	//TODO for _unrealize
@@ -489,7 +432,7 @@ static NetClientInfo __vwlan_client_info = {
 
 static void __set_config_size(VirtWifiInfo *n, uint64_t host_features)
 {
-    int i, config_size = 0;
+    //int i, config_size = 0;
     virtio_add_feature(&host_features, VIRTIO_MAC80211_F_MAC);
 
     //n->config_size = endof(struct virtio_net_config, mac);
@@ -500,8 +443,8 @@ static void __vwlan_device_realize(DeviceState *dev, Error **errp)
 {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
     VirtWifiInfo *n = VIRTIO_MAC80211_OBJ(dev);
-    NetClientState *nc;
-    int i;
+    //NetClientState *nc;
+    //int i;
 
     n->net_conf.mtu = 1500;
     n->host_features |= (1ULL << VIRTIO_NET_F_MTU);
@@ -516,7 +459,7 @@ static void __vwlan_device_realize(DeviceState *dev, Error **errp)
     n->max_queues = VIRTWIFI_MAX_QUEUE_PAIR;
     n->vqs = g_malloc0(sizeof(VirtWifiQueue) * n->max_queues);
     n->curr_queues = 1;
-    n->tx_timeout = n->net_conf.txtimer;
+    n->tx_timeout = n->net_conf.txtimer; //?
 
     n->vqs[VIRTWIFI_DEFAULT_QUEUE].rx_vq = virtio_add_queue(vdev, n->net_conf.rx_queue_size,
     					__vwlan_handle_rx);
@@ -524,7 +467,6 @@ static void __vwlan_device_realize(DeviceState *dev, Error **errp)
     n->vqs[VIRTWIFI_DEFAULT_QUEUE].tx_vq = virtio_add_queue(vdev, n->net_conf.tx_queue_size,
     					__vwlan_handle_tx);
     n->vqs[VIRTWIFI_DEFAULT_QUEUE].tx_bh = qemu_bh_new(__vwlan_tx_bh, &n->vqs[VIRTWIFI_DEFAULT_QUEUE]);
-    n->vqs[VIRTWIFI_DEFAULT_QUEUE].tx_waiting = 0;
     n->vqs[VIRTWIFI_DEFAULT_QUEUE].n = n;
 
 #if 0	//no control queue
@@ -545,7 +487,7 @@ static void __vwlan_device_realize(DeviceState *dev, Error **errp)
     qemu_format_nic_info_str(qemu_get_queue(n->nic), n->nic_conf.macaddr.a);
 
     n->vqs[VIRTWIFI_DEFAULT_QUEUE].tx_waiting = 0;
-    n->tx_burst = n->net_conf.txburst;
+    n->tx_burst = TX_BURST;
     n->promisc = 1;
 
     n->qdev = dev;
@@ -594,7 +536,7 @@ static void __vwlan_instance_init(Object *obj)
 static int __vwlan_post_load(void *opaque, int version_id)
 {
     VirtWifiInfo *n = opaque;
-    VirtIODevice *vdev = VIRTIO_DEVICE(n);
+    //VirtIODevice *vdev = VIRTIO_DEVICE(n);
     int link_down;
 
     link_down = (n->status & VIRTIO_MAC80211_S_LINK_UP) == 0;
@@ -606,7 +548,7 @@ static int __vwlan_post_load(void *opaque, int version_id)
 //TODO
 static int __vwlan_pre_save(void *opaque)
 {
-    VirtWifiInfo *n = opaque;
+    //VirtWifiInfo *n = opaque;
 
     //assert(!n->vhost_started);
 

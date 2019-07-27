@@ -215,10 +215,7 @@ struct send_queue {
  */
 struct receive_queue {
         struct virtqueue *vq;
-        //struct napi_struct napi;	//unused
-        //struct bpf_prog __rcu *xdp_prog;	//xdp unused
         struct page *pages;
-        //struct ewma_pkt_len mrg_avg_pkt_len;
         struct page_frag alloc_frag;
         struct scatterlist sg[MAX_SKB_FRAGS + 2];
         unsigned int min_buf_len;
@@ -494,39 +491,26 @@ static void __vwlan_scan_work(struct work_struct *work)
 }
 #endif
 
-static void __vwlan_mac80211_tx_internal(struct virtwifi_info *info,
+static int __vwlan_mac80211_tx_internal(struct virtwifi_info *info,
 					struct ieee80211_tx_control *control,
 					struct send_queue *sq,
 					struct sk_buff *skb)
 {
 	int num_sg;
-	int err;
 
-	pr_info("__vwlan_mac80211_tx_internal: onward to virtqueue!!\n");
+	pr_info("XXXXX __vwlan_mac80211_tx_internal: onward to virtqueue!!\n");
 
-	sg_init_table(sq->sg, (skb_shinfo(skb)->nr_frags + 1));
-	sg_set_buf(sq->sg, skb->data, skb_headlen(skb));
-	num_sg = skb_to_sgvec(skb, sq->sg + 1, 0, skb->len);
+	sg_init_table(sq->sg, (skb_shinfo(skb)->nr_frags + 2));		//XXX not sure why "+ 2"
+	num_sg = skb_to_sgvec(skb, sq->sg, 0, skb->len);
 	if (unlikely(num_sg < 0))
-		return;
-	num_sg++;
+		return num_sg;
+	
 	//add it to send queue, virtqueue_kick()
-	err = virtqueue_add_outbuf(sq->vq, sq->sg, num_sg, skb, GFP_ATOMIC);
-	if (unlikely(err)) {
-		pr_err("%s Unexpected TX queue failure: %d\n", __func__, err);
-		info->tx_dropped++;
-		dev_kfree_skb_any(skb);
-		return;
-	}
-
-	pr_info("%s: kick send queue!!\n", __func__);
-	//TODO check if running out of space, stop queue if needed
-	virtqueue_kick(sq->vq);
+	return virtqueue_add_outbuf(sq->vq, sq->sg, num_sg, skb, GFP_ATOMIC);
 }
 
-static void __free_old_xmit_skbs(struct virtwifi_info *, struct send_queue *);
+static void __free_old_xmit_skbs(struct virtwifi_info *, struct send_queue *);	//TODO recheck
 
-//TODO
 static void __vwlan_mac80211_tx(struct ieee80211_hw *hw,
                               struct ieee80211_tx_control *control,
                               struct sk_buff *skb)
@@ -539,6 +523,7 @@ static void __vwlan_mac80211_tx(struct ieee80211_hw *hw,
 	//struct ieee80211_hdr *hdr = (struct ieee80211_hdr *) skb->data;
 	//struct ieee80211_chanctx_conf *chanctx_conf;
 	struct ieee80211_channel *channel = NULL;
+	int err;
 	//bool ack;
 
 	if (WARN_ON(skb->len < 10)) {
@@ -547,21 +532,26 @@ static void __vwlan_mac80211_tx(struct ieee80211_hw *hw,
 		return;
 	}
 
-	__free_old_xmit_skbs(info, sq);	//TODO clear used skbs
+	pr_info("XXXXX __vwlan_mac80211_tx: more packet? %s\n", skb->xmit_more ? "yes" : "no");
 
-	//if (!skb->xmit_more)	//TODO: is it needed for wifi packet?
+	//__free_old_xmit_skbs(info, sq);	//clearing used packets in tx callback
+
+	//TODO: need to use refcnt to implement packet burst like xmit_more
+	//if (!skb->xmit_more)	//xmit_more bit does not seems to working for wireless
 		virtqueue_enable_cb_delayed(sq->vq);
 
 	if (!data->use_chanctx)	//currently no support for use_chanctx
 		channel = data->channel;
 
 	if (WARN(!channel, "TX w/o channel - queue = %d\n", txi->hw_queue)) {
+		//virtqueue_disable_cb(sq->vq);
 		ieee80211_free_txskb(hw, skb);
 		return;
 	}
 
 	if (data->idle /*&& !data->tmp_chan*/) {
 		wiphy_dbg(hw->wiphy, "Trying to TX when idle - reject\n");
+		//virtqueue_disable_cb(sq->vq);
 		ieee80211_free_txskb(hw, skb);
 		return;
 	}
@@ -585,7 +575,14 @@ static void __vwlan_mac80211_tx(struct ieee80211_hw *hw,
 #endif
 	//TODO tx stat update here or at free_tx_skbs()
 
-	__vwlan_mac80211_tx_internal(info, control, sq, skb);
+	err = __vwlan_mac80211_tx_internal(info, control, sq, skb);
+	if (unlikely(err)) {
+		pr_err("%s Unexpected TX queue failure: %d\n", __func__, err);
+		info->tx_dropped++;
+		dev_kfree_skb_any(skb);
+		return;
+	}
+
 
 	ieee80211_tx_info_clear_status(txi);
 
@@ -596,8 +593,14 @@ static void __vwlan_mac80211_tx(struct ieee80211_hw *hw,
 	if (!(txi->flags & IEEE80211_TX_CTL_NO_ACK)/* && ack*/)
 		txi->flags |= IEEE80211_TX_STAT_ACK;
 
-	ieee80211_tx_status_irqsafe(hw, skb);
+	ieee80211_tx_status_irqsafe(hw, skb);	//XXX is it needed to report back status?
+
+	pr_info("XXXXX %s: kick send queue!!\n", __func__);
+	//TODO check if running out of space, stop queue if needed
+	virtqueue_kick(sq->vq);
 }
+
+static bool try_fill_recv(struct virtwifi_info *, struct receive_queue *, gfp_t);
 
 static int __vwlan_mac80211_start(struct ieee80211_hw *hw)
 {
@@ -608,6 +611,9 @@ static int __vwlan_mac80211_start(struct ieee80211_hw *hw)
 	wiphy_dbg(hw->wiphy, "%s\n", __func__);
 
 	//TODO may be add MAC here
+
+	if (!try_fill_recv(info, rq, GFP_ATOMIC))
+		schedule_delayed_work(&info->refill, 0);
 
 	//normally register rx/tx intr here
 	if (!virtqueue_enable_cb_delayed(sq->vq))
@@ -662,8 +668,6 @@ static int __vwlan_mac80211_add_interface(struct ieee80211_hw *hw,
 
 	INIT_DELAYED_WORK(&vif_priv->beacon_work, __vwlan_beacon_work);
 	vif_priv->enable_beacon = false;
-
-	//TODO try_fill_recv()
 
 	pr_info("%s (type=%d mac_addr=%pM)\n", __func__, 
 		ieee80211_vif_type_p2p(vif), vif->addr);
@@ -1177,7 +1181,7 @@ resched:
 }
 
 static const struct ieee80211_ops virt_mac80211_ops = {
-	.tx			= __vwlan_mac80211_tx,		//TODO
+	.tx			= __vwlan_mac80211_tx,
 	.start 			= __vwlan_mac80211_start,
 	.stop 			= __vwlan_mac80211_stop,
 	.add_interface 		= __vwlan_mac80211_add_interface,
@@ -1224,12 +1228,17 @@ static void __free_old_xmit_skbs(struct virtwifi_info *vi, struct send_queue *sq
 	//update tx stats
 	vi->tx_bytes += bytes;
 	vi->tx_pkts += pkts;
+
+	pr_info("XXXX total tx_bytes: %llu tx_pkts: %llu\n", vi->tx_bytes, vi->tx_pkts);
 }
 
 static bool try_fill_recv(struct virtwifi_info *vi, struct receive_queue *rq,
                           gfp_t gfp)
 {
 	bool oom;
+
+	pr_info("try_fill_recv: filling receive queue num_free: %d\n", rq->vq->num_free);
+
 	do {
 		struct page_frag *alloc_frag = &rq->alloc_frag;
 		char *buf;
@@ -1250,11 +1259,12 @@ static bool try_fill_recv(struct virtwifi_info *vi, struct receive_queue *rq,
 		if (err < 0)
 			put_page(virt_to_head_page(buf));
 err_refill:
-		oom = err == -ENOMEM;
+		oom = (err == -ENOMEM);
 		if (err)
 			break;
 	} while (rq->vq->num_free);
 	virtqueue_kick(rq->vq);
+
 	return !oom;
 }
 
@@ -1313,46 +1323,49 @@ static unsigned int __receive_packet(struct virtwifi_info *info,
 	return plen;
 }
 
-static int __virtwifi_receive(struct virtwifi_info *vi, struct receive_queue *rq)
-{
-	void *buf;
-	unsigned int len, bytes = 0;
-
-	buf = virtqueue_get_buf(rq->vq, &len);
-	if (buf)
-		bytes = __receive_packet(vi, rq, buf, len);
-
-	//TODO update once refill_work is complete
-	if (rq->vq->num_free > (virtqueue_get_vring_size(rq->vq) / 2)) {
-		if (!try_fill_recv(vi, rq, GFP_ATOMIC))
-			schedule_delayed_work(&vi->refill, 0);
-	}
-
-	return bytes;
-}
-
 //start of receive packet path, same as receive interrupt in other drivers
 static void __virtwifi_rx_handler_cb(struct virtqueue *vq)
 {
 	struct virtwifi_info *info = (struct virtwifi_info *) vq->vdev->priv;
 	struct receive_queue *rq = &info->rq[DEFAULT_VIRTQUEUE];
+	void *buf = NULL;
 
-	unsigned int bytes;
+	unsigned int len, received = 0, bytes = 0;
 
-	bytes = __virtwifi_receive(info, rq);
+	virtqueue_disable_cb(vq);	//disabling receive callback
+
+	while ((buf = virtqueue_get_buf(rq->vq, &len))) {
+		bytes += __receive_packet(info, rq, buf, len);
+		received++;
+	}
 
 	//stats update
-	//spin lock
-	info->rx_pkts++;
+	info->rx_pkts += received;
 	info->rx_bytes += bytes;
-	//spin unlock
+
+	//TODO update once refill_work is complete
+	if (vq->num_free > (virtqueue_get_vring_size(vq) / 2)) {
+		pr_info("__virtwifi_rx_handler_cb: attempting to refill receive queue...\n");
+		if (!try_fill_recv(info, rq, GFP_ATOMIC))
+			schedule_delayed_work(&info->refill, 0);
+	}
+
+	pr_info("XXXXX received %u bytes\n", bytes);
+	
+	virtqueue_enable_cb_delayed(vq);	//enabling receive callback
 }
 
 static void __virtwifi_tx_handler_cb(struct virtqueue *vq)
 {
-	//TODO: identify what goes here!!!
-	//__free_old_xmit_skbs(sq);
-	virtqueue_disable_cb(vq);	//for now only disabling xmit intr
+	struct virtwifi_info *info = (struct virtwifi_info *) vq->vdev->priv;
+	struct send_queue *sq = &info->sq[DEFAULT_VIRTQUEUE];
+
+	virtqueue_disable_cb(vq);	//supress further interrupts
+
+	pr_info("XXXXX __virtwifi_tx_handler_cb...\n");
+
+	__free_old_xmit_skbs(info, sq);		//TODO: remove other occurance of this function
+	//XXX: freeing used skbs may hold receive callback for bit long
 }
 
 static inline int __virtwifi_find_vqs(struct virtwifi_info *vi)
@@ -1363,27 +1376,32 @@ static inline int __virtwifi_find_vqs(struct virtwifi_info *vi)
 
 	int total_vqs;
 	const char **names;
-	bool *ctx;
+	//bool *ctx = NULL; 	//no mergeable_rx_bufs
 
 	/* We expect 1 RX virtqueue followed by 1 TX virtqueue, followed by
 	 * possible N-1 RX/TX queue pairs used in multiqueue mode, followed by
 	 * possible control vq.
 	 */
 	total_vqs = vi->max_queue_pairs * 2;
+#if 0
 	if (vi->has_cvq)
 		total_vqs += 1;
+#endif
 
 	/* Allocate space for find_vqs parameters */
-	vqs = kzalloc(total_vqs * sizeof(*vqs), GFP_KERNEL);
+	vqs = kzalloc(total_vqs * sizeof(struct virtqueue *), GFP_KERNEL);
 	if (!vqs)
 		goto err_vq;
-	callbacks = kmalloc(total_vqs * sizeof(*callbacks), GFP_KERNEL);
+
+	callbacks = kmalloc(total_vqs * sizeof(vq_callback_t *), GFP_KERNEL);
 	if (!callbacks)
 		goto err_callback;
-	names = kmalloc(total_vqs * sizeof(*names), GFP_KERNEL);
+
+	names = kmalloc(total_vqs * sizeof(char *), GFP_KERNEL);
 	if (!names)
 		goto err_names;
 
+#if 0
 	if (!vi->big_packets || vi->mergeable_rx_bufs) {
 		ctx = kzalloc(total_vqs * sizeof(*ctx), GFP_KERNEL);
 		if (!ctx)
@@ -1397,6 +1415,7 @@ static inline int __virtwifi_find_vqs(struct virtwifi_info *vi)
 		callbacks[total_vqs - 1] = NULL;
 		names[total_vqs - 1] = "control";
 	}
+#endif
 
 	/* Allocate/initialize parameters for send/receive virtqueues */
 	callbacks[0] = __virtwifi_rx_handler_cb;
@@ -1407,17 +1426,21 @@ static inline int __virtwifi_find_vqs(struct virtwifi_info *vi)
 	sprintf(vi->sq[DEFAULT_VIRTQUEUE].name, "output.0");
 	names[1] = vi->sq[DEFAULT_VIRTQUEUE].name;
 
+#if 0
 	if (ctx)
 		ctx[0] = true;
+#endif
 
-	ret = vi->vdev->config->find_vqs(vi->vdev, total_vqs, vqs, callbacks,
-			names, ctx, NULL);
+	ret = virtio_find_vqs(vi->vdev, total_vqs, vqs, callbacks,
+		names, NULL);
 	if (ret)
 		goto err_find;
 
+#if 0
 	if (vi->has_cvq) {
 		vi->cvq = vqs[total_vqs - 1];
 	}
+#endif
 	vi->rq[DEFAULT_VIRTQUEUE].vq = vqs[0];
 	vi->rq[DEFAULT_VIRTQUEUE].min_buf_len = GOOD_MAC80211_PACKET_LEN;
 	vi->sq[DEFAULT_VIRTQUEUE].vq = vqs[1];
@@ -1425,13 +1448,13 @@ static inline int __virtwifi_find_vqs(struct virtwifi_info *vi)
 	kfree(names);
 	kfree(callbacks);
 	kfree(vqs);
-	kfree(ctx);
+	//kfree(ctx);
 
 	return 0;
 
 err_find:
-	kfree(ctx);
-err_ctx:
+	//kfree(ctx);
+//err_ctx:
 	kfree(names);
 err_names:
 	kfree(callbacks);
@@ -1443,31 +1466,22 @@ err_vq:
 
 static inline int __virtwifi_alloc_queues(struct virtwifi_info *vi)
 {
-	int i;
-
-	vi->sq = kzalloc(sizeof(*vi->sq) * vi->max_queue_pairs, GFP_KERNEL);
+	vi->sq = kzalloc(sizeof(struct send_queue) * VIRTWIFI_MAX_QUEUE_PAIR, GFP_KERNEL);
 	if (!vi->sq)
 		goto err_sq;
-	vi->rq = kzalloc(sizeof(*vi->rq) * vi->max_queue_pairs, GFP_KERNEL);
+
+	vi->rq = kzalloc(sizeof(struct receive_queue) * VIRTWIFI_MAX_QUEUE_PAIR, GFP_KERNEL);
 	if (!vi->rq)
 		goto err_rq;
-		
+
 	INIT_DELAYED_WORK(&vi->refill, refill_work);
 
-	//XXX max_queue_pairs = 1
-	for (i = 0; i < vi->max_queue_pairs; i++) {
-                vi->rq[i].pages = NULL;
 #if 0
-                netif_napi_add(vi->dev, &vi->rq[i].napi, virtnet_poll,
-                               napi_weight);
-                netif_tx_napi_add(vi->dev, &vi->sq[i].napi, virtnet_poll_tx,
-                                  napi_tx ? napi_weight : 0);
-#endif
-
-                sg_init_table(vi->rq[i].sg, ARRAY_SIZE(vi->rq[i].sg));
-                //ewma_pkt_len_init(&vi->rq[i].mrg_avg_pkt_len);
-                sg_init_table(vi->sq[i].sg, ARRAY_SIZE(vi->sq[i].sg));
-        }
+	//XXX max_queue_pairs = 1
+	vi->rq[DEFAULT_VIRTQUEUE].pages = NULL;
+	sg_init_table(vi->rq[DEFAULT_VIRTQUEUE],  ARRAY_SIZE(vi->rq[DEFAULT_VIRTQUEUE].sg));
+	sg_init_table(vi->sq[DEFAULT_VIRTQUEUE],  ARRAY_SIZE(vi->sq[DEFAULT_VIRTQUEUE].sg));
+#endif	//TODO using sg_init_table ... for now sg_init_one as needed
 
 	return 0;
 err_rq:
@@ -1726,7 +1740,7 @@ static int virtwifi_probe(struct virtio_device *_v)
 		goto failed_vqs;
 
 
-	pr_info("virtwifi_probe: new virtio radio created: %s %pM\n", hwname, 
+	pr_err("XXXX virtwifi_probe: new virtio radio created: %s %pM\n", hwname, 
 			hw->wiphy->perm_addr);
 	return 0;
 
