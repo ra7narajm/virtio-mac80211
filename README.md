@@ -109,9 +109,9 @@ cfg80211              221184  1 mac80211
 4: wlan0: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
     link/ether 52:55:00:d1:55:01 brd ff:ff:ff:ff:ff:ff
 
+```
+
 - TODO,
 	- Sample Linux kernel config to have CONFIG_CFG80211_WEXT, as frontend driver does not implement wireless extension (and do not intend to).
-
-```
 
 -Ratnaraj Mirgal

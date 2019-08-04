@@ -134,10 +134,9 @@ static void __hex_dump(char *frame, int len)
 	int i = 0;
 
 	for (i = 0; i < len; i++) {
-		//if (i % 8)
-		//	printf("\n");
-
-		printf("%2X ", frame[i]);
+		if (!(i % 8))
+			printf("\n");
+		printf("%02X ", ((uint8_t) frame[i]));
 	}
 	printf("\n\n");
 }
@@ -170,7 +169,7 @@ void work_loop(void *data)
 							hubport[nc].rcvbuf.__iov.mode, hubport[nc].rcvbuf.__iov.hubid, hubport[nc].rcvbuf.__iov.portid);
 						if (hubport[nc].rcvbuf.__iov.mode) {	//wifi packet, broadcast
 							int cnt = 0;
-							//__hex_dump(hubport[nc].rcvbuf.frame, nbytes);
+							__hex_dump(hubport[nc].rcvbuf.frame, (nbytes - sizeof(struct ctrl_iov)));
 							for (cnt = 0; cnt < WIFIMEDIUM_MAX_PORTS; cnt++) {
 								//broadcast
 								if (cnt == nc || hubport[cnt].clisock == NO_SOCKET) {
